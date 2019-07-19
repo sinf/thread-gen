@@ -114,8 +114,8 @@ def thread(args):
     num_revolutions=total_steps // revolution_steps
     rev_vertex_count=revolution_steps * len(v_profile_2d)
 
-    num_revolutions = 2
-    total_steps = num_revolutions * revolution_steps
+    #num_revolutions = 2
+    #total_steps = num_revolutions * revolution_steps
 
     v,f=revolve(v_profile_2d, total_steps, rev_step_x, rev_angle)
 
@@ -124,13 +124,17 @@ def thread(args):
     print("verts/revolution:", rev_vertex_count)
     print("steps/revolution:", revolution_steps)
 
+    #print("1st vertex:", v_profile_2d[0])
+    #print("last vertex:", v_profile_2d[-1])
+    #print("rev_step_x:", rev_step_x)
+
     skip = len(v_profile_2d)
-    n = rev_vertex_count
+    #n = rev_vertex_count*(num_revolutions-1) + rev_vertex_count//2
     i0 = 0
-    i1 = n - skip + 1
+    i1 = skip - 1 + rev_vertex_count
     f += quad_strip(
-            range(i0, i0+n, skip),
-            range(i1, i1+n, skip))
+            range(i0, len(v), skip),
+            range(i1, len(v), skip))
 
     print("total vertices:", len(v))
     print("total facets:", len(f))
