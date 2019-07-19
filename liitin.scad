@@ -8,14 +8,10 @@ module english_thread (diameter=0.25, threads_per_inch=20, length=1,
 
 $fn=50;
 
-module british_thread(diameter, length)
-{
-	face=
-}
 
-//difference() {
-	//cylinder(h=10, d=30);
-	british_thread(diameter=1.25 * 25.4, length=20);
-//}
+difference() {
+	cylinder(h=10, d=30);
+	import("kierre1.25in.off");
+}
 
 

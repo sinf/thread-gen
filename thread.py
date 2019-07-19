@@ -11,6 +11,18 @@ def write_obj(filepath, vertices, faces):
                 f.write(" %d" % (i+1))
             f.write("\n")
 
+def write_off(filepath, vertices, faces):
+    with open(filepath,"w") as f:
+        f.write("OFF\n")
+        f.write("%d %d 0\n" % (len(vertices),len(faces)))
+        for v in vertices:
+            f.write("%.8f %.8f %.8f\n" % v)
+        for face in faces:
+            f.write("%d" % len(face))
+            for i in face:
+                f.write(" %d" % i)
+            f.write("\n")
+
 # connect 2 paths (=index arrays) with quads
 def quad_strip(idx_a, idx_b):
     faces = []
@@ -26,7 +38,8 @@ def quad_strip(idx_a, idx_b):
 
 def make_arc(ox, oy, radius, angle_start, angle_delta, seglen):
     num_segs = int(abs(radius*angle_delta/seglen))
-    num_segs += (num_segs%2) # force even number of vertices
+    ##num_segs += (num_segs%2) # force even number of vertices
+    num_segs = max(1, num_segs)
     num_verts = num_segs + 1
     angle_inc = angle_delta/num_segs
     angle = angle_start
@@ -67,6 +80,17 @@ def revolve(shape, num_steps, step_x, step_angle):
 
     return verts, faces
 
+def polygon_tris(verts):
+    verts = iter(verts)
+    v0 = next(verts)
+    v1 = next(verts)
+    faces = []
+    for v2 in verts:
+        faces += [(v0,v1,v2)]
+        v1 = v2
+    return faces
+
+# whittsworth thread
 def thread(args):
     verts=[]
     faces=[]
@@ -105,40 +129,58 @@ def thread(args):
     revolution_steps = int(pi*args.major_diameter / args.segment_length)
     rev_angle = 2*pi / revolution_steps
     rev_step_x = base_triangle_width / revolution_steps
-    total_steps = int(args.thread_length / rev_step_x)
 
     #temp = make_arc(0,0,1,10,0,pi/2/10);
     #temp = v_profile_2d
     #return temp,[(i-1,i) for i in range(1,len(temp))]
 
-    num_revolutions=total_steps // revolution_steps
     rev_vertex_count=revolution_steps * len(v_profile_2d)
 
-    #num_revolutions = 2
-    #total_steps = num_revolutions * revolution_steps
+    """
+    if args.thread_length:
+        total_steps = int(args.thread_length / rev_step_x)
+        num_revolutions=total_steps // revolution_steps
+    elif args.num_revolutions:
+        num_revolutions = args.num_revolutions
+        total_steps = num_revolutions * revolution_steps
+    else:
+        num_revolutions = 10
+        total_steps = revolution_steps
+    """
+    total_steps = int(args.thread_length / rev_step_x)
+    num_revolutions=total_steps // revolution_steps
 
     v,f=revolve(v_profile_2d, total_steps, rev_step_x, rev_angle)
 
+    print("verts / tip:", len(v_tip))
+    print("verts / groove:", len(v_groove))
+    print("verts / 2d profile:", len(v_profile_2d))
+
     print("revolutions:", num_revolutions)
-    print("2d profile:", len(v_profile_2d), "verts")
     print("verts/revolution:", rev_vertex_count)
     print("steps/revolution:", revolution_steps)
 
-    #print("1st vertex:", v_profile_2d[0])
-    #print("last vertex:", v_profile_2d[-1])
-    #print("rev_step_x:", rev_step_x)
+    #print("1st vertex:", v_profile_2d[0]) # x>0
+    #print("last vertex:", v_profile_2d[-1]) # x<0
+    #print("rev_step_x:", rev_step_x) # >0
 
+    # bridge gap between groove halves
     skip = len(v_profile_2d)
-    #n = rev_vertex_count*(num_revolutions-1) + rev_vertex_count//2
     i0 = 0
     i1 = skip - 1 + rev_vertex_count
-    f += quad_strip(
-            range(i0, len(v), skip),
-            range(i1, len(v), skip))
+    f += quad_strip(range(i0, len(v), skip), range(i1, len(v), skip))
+
+    # cap ends
+    i0 = len(v) - rev_vertex_count
+    i0 -= skip
+    i1 = i0 + rev_vertex_count // 2
+    i1 -= i1 % skip
+    f += polygon_tris(range(i0, i1+skip, skip))
+    f += polygon_tris(range(i1, len(v), skip))
+    f += polygon_tris(list(range(len(v)-skip, len(v))) + [i1])
 
     print("total vertices:", len(v))
     print("total facets:", len(f))
-    
     return v,f
 
 def main():
@@ -146,7 +188,8 @@ def main():
     p=ArgumentParser()
     p.add_argument("output")
     # defaults are for 1.25" pipe
-    k=0.3
+    k=1.0
+    k=0.3 #test
     p.add_argument("-d", "--minor-diameter", nargs=1, type=float, default=38.952 * k)
     p.add_argument("-D", "--major-diameter", nargs=1, type=float, default=41.910 * k)
     p.add_argument("-r", "--round-radius-groove", nargs=1, type=float)
@@ -155,15 +198,20 @@ def main():
     p.add_argument("-F", "--flatness-tip", nargs=1, type=float, default=0)
     p.add_argument("-p", "--thread-pitch", nargs=1, type=float, default=2.309)
     p.add_argument("-l", "--thread-length", nargs=1, type=float, default=20)
-    p.add_argument("-s", "--segment-length", nargs=1, type=float, default=0.1)
+    p.add_argument("-s", "--segment-length", nargs=1, type=float, default=0.2)
+    p.add_argument("-n", "--num-revolutions", nargs=1, type=int, help="alternative to --thread-length")
     args = p.parse_args()
 
-    # sadflkjasdf
+    # sadflkjasdf test
     args.round_radius_groove = 0.137329 * args.thread_pitch
     args.round_radius_tip = 0.137329 * args.thread_pitch
 
     verts,faces = thread(args)
-    write_obj(args.output, verts, faces)
+
+    if (args.output.endswith(".off")):
+        write_off(args.output, verts, faces)
+    else:
+        write_obj(args.output, verts, faces)
 
 if __name__ == "__main__":
     main()
