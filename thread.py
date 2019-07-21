@@ -170,14 +170,21 @@ def thread(args):
     i1 = skip - 1 + rev_vertex_count
     f += quad_strip(range(i0, len(v), skip), range(i1, len(v), skip))
 
-    # cap ends
+    # cap end
     i0 = len(v) - rev_vertex_count
     i0 -= skip
     i1 = i0 + rev_vertex_count // 2
     i1 -= i1 % skip
     f += polygon_tris(range(i0, i1+skip, skip))
     f += polygon_tris(range(i1, len(v), skip))
-    f += polygon_tris(list(range(len(v)-skip, len(v))) + [i1])
+    f += polygon_tris([i1] + list(range(len(v)-skip, len(v))) + [i0])
+
+    # cap start
+    i0 = skip - 1
+    i1 = i0 + revolution_steps//2*skip
+    f += polygon_tris(range(i0, i1+skip, skip))
+    f += polygon_tris(range(i1, rev_vertex_count+skip, skip))
+    f += polygon_tris([i1] + [rev_vertex_count-1] + list(range(1,skip)))
 
     print("total vertices:", len(v))
     print("total facets:", len(f))
