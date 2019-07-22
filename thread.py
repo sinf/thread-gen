@@ -1,6 +1,17 @@
 #!/usr/bin/python3
 from math import *
 
+def write_stl(filepath, vertices, faces):
+    import numpy
+    from stl import mesh
+    v = numpy.array(vertices)
+    f = numpy.array(faces)
+    me = mesh.Mesh(numpy.zeros(f.shape[0], dtype=mesh.Mesh.dtype))
+    for i, f in enumerate(f):
+        for j in range(3):
+            me.vectors[i][j] = v[f[j],:]
+    me.save(filepath)
+
 def write_obj(filepath, vertices, faces):
     with open(filepath,"w") as f:
         for v in vertices:
@@ -86,7 +97,7 @@ def polygon_tris(verts):
     v1 = next(verts)
     faces = []
     for v2 in verts:
-        faces += [(v0,v1,v2)]
+        faces += [(v2,v1,v0)]
         v1 = v2
     return faces
 
@@ -175,16 +186,16 @@ def thread(args):
     i0 -= skip
     i1 = i0 + rev_vertex_count // 2
     i1 -= i1 % skip
-    f += polygon_tris(range(i0, i1+skip, skip))
-    f += polygon_tris(range(i1, len(v), skip))
-    f += polygon_tris([i1] + list(range(len(v)-skip, len(v))) + [i0])
+    f += polygon_tris(reversed(range(i0, i1+skip, skip)))
+    f += polygon_tris(reversed(range(i1, len(v), skip)))
+    f += polygon_tris([i1] + [i0] + list(reversed(range(len(v)-skip, len(v)))))
 
     # cap start
     i0 = skip - 1
     i1 = i0 + revolution_steps//2*skip
     f += polygon_tris(range(i0, i1+skip, skip))
     f += polygon_tris(range(i1, rev_vertex_count+skip, skip))
-    f += polygon_tris([i1] + [rev_vertex_count-1] + list(range(1,skip)))
+    f += polygon_tris([i1] + [rev_vertex_count+skip-1] + list(range(1,skip)))
 
     print("total vertices:", len(v))
     print("total facets:", len(f))
@@ -193,7 +204,7 @@ def thread(args):
 def main():
     from argparse import ArgumentParser
     p=ArgumentParser()
-    p.add_argument("output")
+    p.add_argument("output", nargs="+")
     # defaults are for 1.25" pipe
     k=1.0
     k=0.3 #test
@@ -215,10 +226,14 @@ def main():
 
     verts,faces = thread(args)
 
-    if (args.output.endswith(".off")):
-        write_off(args.output, verts, faces)
-    else:
-        write_obj(args.output, verts, faces)
+    for fn in args.output:
+        print(fn)
+        if (fn.endswith(".off")):
+            write_off(fn, verts, faces)
+        elif (fn.endswith(".stl")):
+            write_stl(fn, verts, faces)
+        else:
+            write_obj(fn, verts, faces)
 
 if __name__ == "__main__":
     main()

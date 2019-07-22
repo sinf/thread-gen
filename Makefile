@@ -1,5 +1,6 @@
 
-STUFF=kierre1.25in.off kierre1.25in.obj
+KIERRE=kierre1.25in.off kierre1.25in.obj kierre1.25in.stl
+STUFF=$(KIERRE) liitin.stl
 .PHONY: all clean
 
 all: $(STUFF)
@@ -10,9 +11,7 @@ clean:
 liitin.stl: liitin.scad threads.scad kierre1.25in.off
 	openscad -o $@ $<
 
-kierre1.25in.off: thread.py
-	python3 thread.py $@
+kierre1.25in.%: thread.py
+	python3 thread.py $(KIERRE)
 
-kierre1.25in.obj: thread.py
-	python3 thread.py $@
 

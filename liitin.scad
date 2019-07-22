@@ -9,9 +9,16 @@ module english_thread (diameter=0.25, threads_per_inch=20, length=1,
 $fn=50;
 
 
+/*
 difference() {
 	cylinder(h=10, d=30);
 	import("kierre1.25in.off");
 }
+*/
 
+module kierre() {
+	import("kierre1.25in.off");
+}
+
+kierre();
 
