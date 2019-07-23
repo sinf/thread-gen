@@ -6,19 +6,15 @@ module english_thread (diameter=0.25, threads_per_inch=20, length=1,
                       leadfac=1.0, test=false)
 */
 
-$fn=50;
-
-
-/*
-difference() {
-	cylinder(h=10, d=30);
-	import("kierre1.25in.off");
-}
-*/
+$fn=100;
 
 module kierre() {
-	import("kierre1.25in.off");
+	import("kierre1.25in.stl");
 }
 
-kierre();
+difference() {
+	cylinder(h=10, d=30, center=true);
+	rotate(90,[0,1,0]) translate([-10,0,0]) kierre();
+}
+
 

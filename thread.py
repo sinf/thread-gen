@@ -34,6 +34,11 @@ def write_off(filepath, vertices, faces):
                 f.write(" %d" % i)
             f.write("\n")
 
+def write_verts_xy(filepath, vertices):
+    with open(filepath,"w") as f:
+        for x,y,z in vertices:
+            f.write("%.10f %.10f\n" % (x,y))
+
 # connect 2 paths (=index arrays) with quads
 def quad_strip(idx_a, idx_b):
     faces = []
@@ -42,7 +47,8 @@ def quad_strip(idx_a, idx_b):
     a0 = next(idx_a)
     b0 = next(idx_b)
     for a1,b1 in zip(idx_a, idx_b):
-        faces += [(a0,b0,a1),(a1,b0,b1)]
+        #faces += [(a0,b0,a1),(a1,b0,b1)]
+        faces += [(b0,a0,a1),(b0,a1,b1)]
         a0 = a1
         b0 = b1
     return faces
@@ -72,6 +78,13 @@ def translated(verts, off_x, c, s):
     return result
 
 def revolve(shape, num_steps, step_x, step_angle):
+    """ shape is a set of vertices on XY plane, from right to left
+    y
+    |       ...
+    | vN   /   \   v0
+    |   ../     \..
+    +------------> x
+    """
     verts = []
     faces = []
     angle = 0
@@ -91,20 +104,83 @@ def revolve(shape, num_steps, step_x, step_angle):
 
     return verts, faces
 
+def revolve_solid(shape, num_steps, step_x, step_angle, revolution_steps):
+
+    v,f = revolve(shape, num_steps, step_x, step_angle)
+
+    # bridge gap between groove halves
+    skip = len(shape)
+    rev_vertex_count = skip * revolution_steps
+    i0 = 0
+    i1 = skip - 1 + rev_vertex_count
+    f += quad_strip(range(i0, len(v), skip), range(i1, len(v), skip))
+
+    # cap end
+    i0 = len(v) - rev_vertex_count
+    i0 -= skip
+    i1 = i0 + rev_vertex_count // 2
+    i1 -= i1 % skip
+    f += polygon_tris(range(i0, i1+skip, skip))
+    f += polygon_tris(range(i1, len(v), skip))
+    f += polygon_tris([i1] + list(range(len(v)-skip, len(v))) + [i0])
+
+    # cap start
+    i0 = skip - 1
+    i1 = i0 + revolution_steps//2*skip
+    f += polygon_tris(reversed(range(i0, i1+skip, skip)))
+    f += polygon_tris(reversed(range(i1, rev_vertex_count+skip, skip)))
+    f += polygon_tris([i1] + list(reversed([rev_vertex_count+skip-1] + list(range(skip)))))
+
+    return v,f
+
+
 def polygon_tris(verts):
     verts = iter(verts)
     v0 = next(verts)
     v1 = next(verts)
     faces = []
     for v2 in verts:
-        faces += [(v2,v1,v0)]
+        faces += [(v0,v1,v2)]
         v1 = v2
     return faces
 
-# whittsworth thread
-def thread(args):
-    verts=[]
-    faces=[]
+def cubicbezier(self, x0, y0, x1, y1, x2, y2, x3, y3, n):
+    pts = []
+    for i in range(n):
+        t = i / (n-1)
+        a = (1. - t)**3
+        b = 3. * t * (1. - t)**2
+        c = 3.0 * t**2 * (1.0 - t)
+        d = t**3
+        x = a * x0 + b * x1 + c * x2 + d * x3
+        y = a * y0 + b * y1 + c * y2 + d * y3
+        pts += [x,y]
+    return pts
+
+def rounded_part(below, a, h):
+    if below:
+        pass
+    else:
+        pass
+        # sin(a) = r / y
+        # sin(a) = f / h
+        # y = h + r
+        # f = k*h
+        # sin(a) = (y-h)/y
+
+def thread_shape(H,P,cut_int,cut_ext,round_below_int,round_below_ext):
+    """
+    H: height of base triangle
+    P: width of base triangle
+    cut_int: where to cut internal corner (as a fraction of H)
+    cut_int: where to cut external corner (as a fraction of H)
+    round_below_int: should inner corner be rounded below the cutting line (vs above)
+    round_below_ext: should external corner be rounded below the cutting line (vs above)
+    """
+    a = 0.5 * P / H
+    #todo
+
+def whitworth_thread_shape(args):
 
     base_triangle_height = args.major_diameter - args.minor_diameter
     base_triangle_width = args.thread_pitch
@@ -137,15 +213,28 @@ def thread(args):
     v_groove_r = [(v[0]+base_triangle_width,v[1],v[2]) for v in v_groove[len(v_groove)//2:]]
     v_profile_2d = v_groove_r + v_tip + v_groove_l
 
+    print("verts / tip:", len(v_tip))
+    print("verts / groove:", len(v_groove))
+    print("verts / 2d profile:", len(v_profile_2d))
+
+    return v_profile_2d
+
+def iso_metric_thread(a,D,P):
+    H = sqrt(3)/2.0*P
+    a.major_diameter = D
+    a.minor_diameter = 5.0*H/8.0
+
+# whittsworth thread
+def thread(args):
+    verts=[]
+    faces=[]
+    v_profile_2d = whitworth_thread_shape(args)
+
+    write_verts_xy("vertices.dat", v_profile_2d)
+
     revolution_steps = int(pi*args.major_diameter / args.segment_length)
     rev_angle = 2*pi / revolution_steps
-    rev_step_x = base_triangle_width / revolution_steps
-
-    #temp = make_arc(0,0,1,10,0,pi/2/10);
-    #temp = v_profile_2d
-    #return temp,[(i-1,i) for i in range(1,len(temp))]
-
-    rev_vertex_count=revolution_steps * len(v_profile_2d)
+    rev_step_x = args.thread_pitch / revolution_steps
 
     """
     if args.thread_length:
@@ -161,41 +250,14 @@ def thread(args):
     total_steps = int(args.thread_length / rev_step_x)
     num_revolutions=total_steps // revolution_steps
 
-    v,f=revolve(v_profile_2d, total_steps, rev_step_x, rev_angle)
-
-    print("verts / tip:", len(v_tip))
-    print("verts / groove:", len(v_groove))
-    print("verts / 2d profile:", len(v_profile_2d))
+    v,f=revolve_solid(v_profile_2d, total_steps, rev_step_x, rev_angle, revolution_steps)
 
     print("revolutions:", num_revolutions)
-    print("verts/revolution:", rev_vertex_count)
     print("steps/revolution:", revolution_steps)
 
     #print("1st vertex:", v_profile_2d[0]) # x>0
     #print("last vertex:", v_profile_2d[-1]) # x<0
     #print("rev_step_x:", rev_step_x) # >0
-
-    # bridge gap between groove halves
-    skip = len(v_profile_2d)
-    i0 = 0
-    i1 = skip - 1 + rev_vertex_count
-    f += quad_strip(range(i0, len(v), skip), range(i1, len(v), skip))
-
-    # cap end
-    i0 = len(v) - rev_vertex_count
-    i0 -= skip
-    i1 = i0 + rev_vertex_count // 2
-    i1 -= i1 % skip
-    f += polygon_tris(reversed(range(i0, i1+skip, skip)))
-    f += polygon_tris(reversed(range(i1, len(v), skip)))
-    f += polygon_tris([i1] + [i0] + list(reversed(range(len(v)-skip, len(v)))))
-
-    # cap start
-    i0 = skip - 1
-    i1 = i0 + revolution_steps//2*skip
-    f += polygon_tris(range(i0, i1+skip, skip))
-    f += polygon_tris(range(i1, rev_vertex_count+skip, skip))
-    f += polygon_tris([i1] + [rev_vertex_count+skip-1] + list(range(1,skip)))
 
     print("total vertices:", len(v))
     print("total facets:", len(f))
@@ -216,7 +278,7 @@ def main():
     p.add_argument("-F", "--flatness-tip", nargs=1, type=float, default=0)
     p.add_argument("-p", "--thread-pitch", nargs=1, type=float, default=2.309)
     p.add_argument("-l", "--thread-length", nargs=1, type=float, default=20)
-    p.add_argument("-s", "--segment-length", nargs=1, type=float, default=0.2)
+    p.add_argument("-s", "--segment-length", nargs=1, type=float, default=0.05)
     p.add_argument("-n", "--num-revolutions", nargs=1, type=int, help="alternative to --thread-length")
     args = p.parse_args()
 
@@ -226,14 +288,13 @@ def main():
 
     verts,faces = thread(args)
 
+    exporters = {".obj":write_obj, ".off":write_off, ".stl":write_stl}
+
     for fn in args.output:
         print(fn)
-        if (fn.endswith(".off")):
-            write_off(fn, verts, faces)
-        elif (fn.endswith(".stl")):
-            write_stl(fn, verts, faces)
-        else:
-            write_obj(fn, verts, faces)
+        ext = fn[-4:]
+        func=exporters.get(ext, write_obj)
+        func(fn, verts, faces)
 
 if __name__ == "__main__":
     main()
