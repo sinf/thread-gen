@@ -219,22 +219,71 @@ def whitworth_thread_shape(args):
 
     return v_profile_2d
 
-def iso_metric_thread(a,D,P):
+def iso_metric_thread(D,P,offset=0.2):
+    """
+    D: major diameter
+    P: thread pitch
+    offset: female positive, male negative
+    """
     H = sqrt(3)/2.0*P
-    a.major_diameter = D
-    a.minor_diameter = 5.0*H/8.0
+    R = offset + D/2
+    r = R - 5/8*H
+
+    base_triangle_height = H
+    base_triangle_width = P
+
+    v_profile_2d = [(P/2,r,0),(3/8*P,r,0),(P/16,R,0),(-P/16,R,0),(-3/8*P,r,0)]
+
+    print("verts / 2d profile:", len(v_profile_2d))
+
+    return (v_profile_2d,P)
+
+def iso_metric_thread_m(m):
+    params={
+    # D, P
+    "M2"         :  (2.0,  0.40),
+    "M2-fine"    :  (2.0,  0.25),
+    "M2.5"       :  (2.5,  0.45),
+    "M2.5-fine"  :  (2.5,  0.35),
+    "M3"         :  (3.0,  0.50),
+    "M3-fine"    :  (3.0,  0.35),
+    "M4"         :  (4.0,  0.50),
+    "M4-fine"    :  (4.0,  0.35),
+    "M5"         :  (5.0,  0.80),
+    "M5-fine"    :  (5.0,  0.50),
+    "M6"         :  (6.0,  1.00),
+    "M6-fine"    :  (6.0,  0.75),
+    "M8"         :  (8.0,  1.00),
+    "M8-fine"    :  (8.0,  0.75),
+    "M10"        :  (10.,  1.50),
+    "M10-fine"   :  (10.,  1.25),
+    "M10-finer"  :  (10.,  1.00),
+    "M12"        :  (12.,  1.75),
+    "M12-fine"   :  (12.,  1.50),
+    "M12-finer"  :  (12.,  1.25),
+    }
+    p=params[m.upper()]
+    return iso_metric_thread(p[0],p[1])
 
 # whittsworth thread
 def thread(args):
     verts=[]
     faces=[]
-    v_profile_2d = whitworth_thread_shape(args)
 
+    if args.thread_preset[0].upper().startswith("M"):
+        print("ISO metric thread")
+        v_profile_2d, thread_pitch = iso_metric_thread_m(args.thread_preset[0])
+    else:
+        print("Whitworth thread")
+        v_profile_2d, thread_pitch = whitworth_thread_shape(args)
+
+    print("Thread pitch: %.8f" % thread_pitch)
     write_verts_xy("vertices.dat", v_profile_2d)
 
-    revolution_steps = int(pi*args.major_diameter / args.segment_length)
+    major_diameter = max(v[1] for v in v_profile_2d)
+    revolution_steps = int(pi*major_diameter / args.segment_length)
     rev_angle = 2*pi / revolution_steps
-    rev_step_x = args.thread_pitch / revolution_steps
+    rev_step_x = thread_pitch / revolution_steps
 
     """
     if args.thread_length:
@@ -270,6 +319,7 @@ def main():
     # defaults are for 1.25" pipe
     k=1.0
     k=0.3 #test
+    p.add_argument("-t", "--thread-preset", nargs=1, type=str, default="whitworth")
     p.add_argument("-d", "--minor-diameter", nargs=1, type=float, default=38.952 * k)
     p.add_argument("-D", "--major-diameter", nargs=1, type=float, default=41.910 * k)
     p.add_argument("-r", "--round-radius-groove", nargs=1, type=float)
