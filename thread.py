@@ -28,7 +28,7 @@ def write_stl(filepath, vertices, faces):
     """ header is junk, positive octant rule ignored, triangle sorting rule ignored """
     from struct import pack
     with open(filepath,"wb") as f:
-        f.write(pack("<80xL", len(faces)))
+        f.write(pack("<80sL", (b'stl'*27)[:80], len(faces)))
         for face in faces:
             v = [vertices[i] for i in face]
             v0,v1,v2 = Vec(*v[0]), Vec(*v[1]), Vec(*v[2])
@@ -61,12 +61,6 @@ def write_off(filepath, vertices, faces):
             for i in face:
                 f.write(" %d" % i)
             f.write("\n")
-
-def write_verts_xy(filepath, vertices):
-    """ for use with gnuplot """
-    with open(filepath,"w") as f:
-        for x,y,z in vertices:
-            f.write("%.10f %.10f\n" % (x,y))
 
 def quad_strip(idx_a, idx_b):
     """ connect 2 paths (=index arrays) with quads """
@@ -110,12 +104,6 @@ def cubic_bezier(x0, y0, x1, y1, x2, y2, x3, y3, n):
         pts += [x,y]
     return pts
 
-def rounded_corner(ax, ay, bx, by, cx, cy, dx, dy, r):
-    a,b,c,d = Vec(ax,ay), Vec(bx,by), Vec(cx,cy), Vec(dx,dy)
-    p0 = b + (a-b).n() * r
-    p1 = c + (d-c).n() * r
-    return [(ax,ay),cubic_bezier(p0.x,p0.y,bx,by,cx,cy,p1.x,p1.y),(dx,dy)]
-
 def translated(verts, off_x, c, s):
     result = []
     for x,y,z in verts:
@@ -125,8 +113,21 @@ def translated(verts, off_x, c, s):
         result += [(xx,yy,zz)]
     return result
 
+def tip_cubic(w,h,a,n,scale_y,ox,oy):
+    """ Make a rounded tip shape using cubic bezier
+    w: half of tip width
+    h: height of rounded bit. negative to put the curve below line y=0, positive for above
+    a: angle of the base triangle's groove part
+    """
+    u = abs(h)*tan(a*0.5)
+    if h<0:
+        verts=cubic_bezier(w+u,h,w,0,-w,0,w-u,h,n)
+    else:
+        verts=cubic_bezier(w,0,w-u,h,-w+u,h,-w,0,n)
+    return [(x+ox,scale_y*y+oy) for x,y in verts]
+
 def revolve(shape, num_steps, step_x, step_angle):
-    """ shape is a set of vertices on XY plane, from right to left
+    """ shape is a list of (x,y,z) vertices on XY plane, from right to left
     y
     |       ...
     | vN   /   \   v0
@@ -152,7 +153,18 @@ def revolve(shape, num_steps, step_x, step_angle):
 
     return verts, faces
 
+def polygon_tris(verts):
+    verts = iter(verts)
+    v0 = next(verts)
+    v1 = next(verts)
+    faces = []
+    for v2 in verts:
+        faces += [(v0,v1,v2)]
+        v1 = v2
+    return faces
+
 def revolve_solid(shape, num_steps, step_x, step_angle, revolution_steps):
+    """ like revolve() but also add caps to produce a closed mesh """
 
     v,f = revolve(shape, num_steps, step_x, step_angle)
 
@@ -181,199 +193,97 @@ def revolve_solid(shape, num_steps, step_x, step_angle, revolution_steps):
 
     return v,f
 
-
-def polygon_tris(verts):
-    verts = iter(verts)
-    v0 = next(verts)
-    v1 = next(verts)
-    faces = []
-    for v2 in verts:
-        faces += [(v0,v1,v2)]
-        v1 = v2
-    return faces
-
-def rounded_part(below, a, h):
-    if below:
-        pass
-    else:
-        pass
-        # sin(a) = r / y
-        # sin(a) = f / h
-        # y = h + r
-        # f = k*h
-        # sin(a) = (y-h)/y
-
-def thread_shape(H,P,cut_int,cut_ext,round_below_int,round_below_ext):
-    """
-    H: height of base triangle
-    P: width of base triangle
-    cut_int: where to cut internal corner (as a fraction of H)
-    cut_int: where to cut external corner (as a fraction of H)
-    round_below_int: should inner corner be rounded below the cutting line (vs above)
-    round_below_ext: should external corner be rounded below the cutting line (vs above)
-    """
-    a = 0.5 * P / H
-    #todo
-
-def whitworth_thread_shape(args):
-
-    minor_r = args.minor_diameter * 0.5
-    major_r = args.major_diameter * 0.5
-
-    base_triangle_height = args.major_diameter - args.minor_diameter
-    base_triangle_width = args.thread_pitch
-    alpha = atan(2*base_triangle_height / base_triangle_width)
-    gamma = pi/2 - alpha
-
-    tip_circle_pos = args.round_radius_tip / sin(alpha)
-    tip_arc_angle = 2*alpha #2*(pi/2 - gamma)
-    tip_arc_length = tip_arc_angle * args.round_radius_tip
-    v_tip = make_arc(
-        0,
-        minor_r + base_triangle_height - args.round_radius_tip,
-        args.round_radius_tip,
-        pi/2 - tip_arc_angle*0.5,
-        tip_arc_angle,
-        args.segment_length)
-
-    groove_circle_pos = args.round_radius_groove / sin(alpha)
-    groove_arc_angle = tip_arc_angle
-    groove_arc_length = groove_arc_angle * args.round_radius_groove
-    v_groove = make_arc(
-        -base_triangle_width*0.5,
-        minor_r + args.round_radius_groove,
-        args.round_radius_groove,
-        -(pi/2 - groove_arc_angle*0.5),
-        -groove_arc_angle,
-        args.segment_length)
-
-    v_groove_l = v_groove[:len(v_groove)//2]
-    v_groove_r = [(v[0]+base_triangle_width,v[1],v[2]) for v in v_groove[len(v_groove)//2:]]
-    v_profile_2d = v_groove_r + v_tip + v_groove_l
-
-    print("verts / tip:", len(v_tip))
-    print("verts / groove:", len(v_groove))
-    print("verts / 2d profile:", len(v_profile_2d))
-
-    return v_profile_2d
-
-def iso_metric_thread(D,P,offset=0.2):
+def iso_metric_thread(D,P):
     """
     D: major diameter
     P: thread pitch
-    offset: female positive, male negative
     """
     H = sqrt(3)/2.0*P
-    R = offset + D/2
-    r = R - 5/8*H
+    y_p = D/2 - H/2
 
-    base_triangle_height = H
-    base_triangle_width = P
+    x0 = 1/2*P
+    x1 = 3/8*P
+    x2 = 1/16*P
 
-    v_profile_2d = [(P/2,r,0),(3/8*P,r,0),(P/16,R,0),(-P/16,R,0),(-3/8*P,r,0)]
+    x0 = 5/8*P
+    x1 = 3/8*P
+    x2 = 1/16*P
+    x3 = -x2
+    x4 = -x1
 
-    print("verts / 2d profile:", len(v_profile_2d))
+    y0 = -1/4*H + y_p
+    y1 = 3/8*H + y_p
 
-    return (v_profile_2d,P)
+    v_profile_2d = [(x0,y0),(x1,y0),(x2,y1),(x3,y1),(x4,y0)]
 
-def iso_metric_thread_m(m):
-    params={
-    # D, P
-    "M2"         :  (2.0,  0.40),
-    "M2-fine"    :  (2.0,  0.25),
-    "M2.5"       :  (2.5,  0.45),
-    "M2.5-fine"  :  (2.5,  0.35),
-    "M3"         :  (3.0,  0.50),
-    "M3-fine"    :  (3.0,  0.35),
-    "M4"         :  (4.0,  0.50),
-    "M4-fine"    :  (4.0,  0.35),
-    "M5"         :  (5.0,  0.80),
-    "M5-fine"    :  (5.0,  0.50),
-    "M6"         :  (6.0,  1.00),
-    "M6-fine"    :  (6.0,  0.75),
-    "M8"         :  (8.0,  1.00),
-    "M8-fine"    :  (8.0,  0.75),
-    "M10"        :  (10.,  1.50),
-    "M10-fine"   :  (10.,  1.25),
-    "M10-finer"  :  (10.,  1.00),
-    "M12"        :  (12.,  1.75),
-    "M12-fine"   :  (12.,  1.50),
-    "M12-finer"  :  (12.,  1.25),
+    return v_profile_2d, P
+
+def get_2d_profile(preset):
+    table={
+    "m2"         :  (iso_metric_thread, (2.0, 0.40)),
+    "m2-fine"    :  (iso_metric_thread, (2.0, 0.25)),
+    "m2.5"       :  (iso_metric_thread, (2.5, 0.45)),
+    "m2.5-fine"  :  (iso_metric_thread, (2.5, 0.35)),
+    "m3"         :  (iso_metric_thread, (3.0, 0.50)),
+    "m3-fine"    :  (iso_metric_thread, (3.0, 0.35)),
+    "m4"         :  (iso_metric_thread, (4.0, 0.50)),
+    "m4-fine"    :  (iso_metric_thread, (4.0, 0.35)),
+    "m5"         :  (iso_metric_thread, (5.0, 0.80)),
+    "m5-fine"    :  (iso_metric_thread, (5.0, 0.50)),
+    "m6"         :  (iso_metric_thread, (6.0, 1.00)),
+    "m6-fine"    :  (iso_metric_thread, (6.0, 0.75)),
+    "m8"         :  (iso_metric_thread, (8.0, 1.00)),
+    "m8-fine"    :  (iso_metric_thread, (8.0, 0.75)),
+    "m10"        :  (iso_metric_thread, (10., 1.50)),
+    "m10-fine"   :  (iso_metric_thread, (10., 1.25)),
+    "m10-finer"  :  (iso_metric_thread, (10., 1.00)),
+    "m12"        :  (iso_metric_thread, (12., 1.75)),
+    "m12-fine"   :  (iso_metric_thread, (12., 1.50)),
+    "m12-finer"  :  (iso_metric_thread, (12., 1.25)),
     }
-    p=params[m.upper()]
-    return iso_metric_thread(p[0],p[1])
+    preset = preset.lower()
+    if preset not in table:
+        print("Unknown preset:", preset)
+    else:
+        func, params = table[preset]
+        return func(*params)
 
-# whittsworth thread
 def thread(args):
     verts=[]
     faces=[]
 
-    if args.thread_preset[0].upper().startswith("M"):
-        print("ISO metric thread")
-        v_profile_2d, thread_pitch = iso_metric_thread_m(args.thread_preset[0])
-    else:
-        print("Whitworth thread")
-        v_profile_2d, thread_pitch = whitworth_thread_shape(args)
+    v_profile_2d, thread_pitch = get_2d_profile(args.thread_preset[0])
 
-    print("Thread pitch: %.8f" % thread_pitch)
-    write_verts_xy("vertices.dat", v_profile_2d)
+    max_y = max(v[1] for v in v_profile_2d)
+    min_y = min(v[1] for v in v_profile_2d)
 
-    major_diameter = max(v[1] for v in v_profile_2d)
-    revolution_steps = int(pi*major_diameter / args.segment_length)
+    revolution_steps = int(2*pi*max_y / args.segment_length)
     rev_angle = 2*pi / revolution_steps
     rev_step_x = thread_pitch / revolution_steps
-
-    """
-    if args.thread_length:
-        total_steps = int(args.thread_length / rev_step_x)
-        num_revolutions=total_steps // revolution_steps
-    elif args.num_revolutions:
-        num_revolutions = args.num_revolutions
-        total_steps = num_revolutions * revolution_steps
-    else:
-        num_revolutions = 10
-        total_steps = revolution_steps
-    """
     total_steps = int(args.thread_length / rev_step_x)
     num_revolutions=total_steps // revolution_steps
 
-    v,f=revolve_solid(v_profile_2d, total_steps, rev_step_x, rev_angle, revolution_steps)
+    v_profile_2d_z = [(x,y+args.offset,0) for x,y in v_profile_2d]
+    v,f=revolve_solid(v_profile_2d_z, total_steps, rev_step_x, rev_angle, revolution_steps)
 
+    print("thread pitch: %.8f" % thread_pitch)
+    print("y coords range: [%.8f, %.8f]" % (min_y, max_y))
     print("revolutions:", num_revolutions)
     print("steps/revolution:", revolution_steps)
-
-    #print("1st vertex:", v_profile_2d[0]) # x>0
-    #print("last vertex:", v_profile_2d[-1]) # x<0
-    #print("rev_step_x:", rev_step_x) # >0
-
     print("total vertices:", len(v))
     print("total facets:", len(f))
+
     return v,f
 
 def main():
     from argparse import ArgumentParser
     p=ArgumentParser()
     p.add_argument("output", nargs="*")
-    # defaults are for 1.25" pipe
-    k=1.0
-    k=0.3 #test
-    p.add_argument("-t", "--thread-preset", nargs=1, type=str, default="whitworth")
-    p.add_argument("-d", "--minor-diameter", nargs=1, type=float, default=38.952 * k)
-    p.add_argument("-D", "--major-diameter", nargs=1, type=float, default=41.910 * k)
-    p.add_argument("-r", "--round-radius-groove", nargs=1, type=float)
-    p.add_argument("-R", "--round-radius-tip", nargs=1, type=float)
-    p.add_argument("-f", "--flatness-groove", nargs=1, type=float, default=0)
-    p.add_argument("-F", "--flatness-tip", nargs=1, type=float, default=0)
-    p.add_argument("-p", "--thread-pitch", nargs=1, type=float, default=2.309)
-    p.add_argument("-l", "--thread-length", nargs=1, type=float, default=20)
-    p.add_argument("-s", "--segment-length", nargs=1, type=float, default=0.05)
-    p.add_argument("-n", "--num-revolutions", nargs=1, type=int, help="alternative to --thread-length")
-    p.add_argument("-e", "--export", nargs=2, type=str, action="append", help="export as FORMAT to FILE", metavar=("FORMAT","FILE"))
+    p.add_argument("-t", "--thread-preset", nargs=1, type=str, default="m4", help="M<integer> code")
+    p.add_argument("-l", "--thread-length", nargs=1, type=float, default=15, help="Length of the construct")
+    p.add_argument("-s", "--segment-length", nargs=1, type=float, default=0.05, help="Maximum length for a segment. Controls the final vertex count")
+    p.add_argument("-y", "--offset", nargs=1, type=float, default=0.0, help="offset to add to y coordinates. For external thread offset<0 (bolt). For internal thread offset>0 (nut, thread is CSG-subtracted from a solid).")
     args = p.parse_args()
-
-    # sadflkjasdf test
-    args.round_radius_groove = 0.137329 * args.thread_pitch
-    args.round_radius_tip = 0.137329 * args.thread_pitch
 
     verts,faces = thread(args)
 
@@ -381,7 +291,6 @@ def main():
         "obj":write_obj,
         "off":write_off,
         "stl":write_stl,
-        "stlb":write_stl_binary,
     }
 
     for fn in args.output:
@@ -389,13 +298,6 @@ def main():
         print("Output to:", fn)
         func=exporters.get(ext, write_obj)
         func(fn, verts, faces)
-
-    for e,fn in args.export:
-        if e in exporters:
-            print("Output with explicit filetype:", e, fn)
-            exporters[e](fn, verts, faces)
-        else:
-            print("No such exporter:", e)
 
 if __name__ == "__main__":
     main()
