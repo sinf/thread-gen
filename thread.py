@@ -217,6 +217,9 @@ def thread_shape(H,P,cut_int,cut_ext,round_below_int,round_below_ext):
 
 def whitworth_thread_shape(args):
 
+    minor_r = args.minor_diameter * 0.5
+    major_r = args.major_diameter * 0.5
+
     base_triangle_height = args.major_diameter - args.minor_diameter
     base_triangle_width = args.thread_pitch
     alpha = atan(2*base_triangle_height / base_triangle_width)
@@ -227,7 +230,7 @@ def whitworth_thread_shape(args):
     tip_arc_length = tip_arc_angle * args.round_radius_tip
     v_tip = make_arc(
         0,
-        args.minor_diameter + base_triangle_height - args.round_radius_tip,
+        minor_r + base_triangle_height - args.round_radius_tip,
         args.round_radius_tip,
         pi/2 - tip_arc_angle*0.5,
         tip_arc_angle,
@@ -238,7 +241,7 @@ def whitworth_thread_shape(args):
     groove_arc_length = groove_arc_angle * args.round_radius_groove
     v_groove = make_arc(
         -base_triangle_width*0.5,
-        args.minor_diameter + args.round_radius_groove,
+        minor_r + args.round_radius_groove,
         args.round_radius_groove,
         -(pi/2 - groove_arc_angle*0.5),
         -groove_arc_angle,
