@@ -1,9 +1,48 @@
 #!/usr/bin/python3
 from math import *
 
+class Vec:
+    def __init__(self,x,y=None,z=0):
+        self.x = x
+        self.y = y if y is not None else x
+        self.z = z if y is not None else x
+    def length(self):
+        return sqrt(self.x**2 + self.y**2 + self.z**2)
+    def fma(self, other, t=1.0):
+        return Vec(
+            self.x + other.x*t,
+            self.y + other.y*t,
+            self.z + other.z*t)
+    def cross(self, other):
+        return Vec(
+            self.y*other.z - other.y*self.z,
+            other.x*self.z - self.x*other.z,
+            self.x*other.y - other.x*self.y)
+
+def write_stl_binary(filepath, vertices, faces):
+    from struct import pack
+    with open(filepath,"wb") as f:
+        # header is junk
+        # positive octant rule ignored
+        # triangle sorting rule ignored
+        f.write(pack("<80xL", len(faces)))
+        for face in faces:
+            v = [vertices[i] for i in face]
+            v0,v1,v2 = Vec(*v[0]), Vec(*v[1]), Vec(*v[2])
+            n = v1.fma(v0,-1.).cross(v2.fma(v1,-1.))
+            n = Vec(0.).fma(n, 1.0/n.length())
+            f.write(pack("3f", n.x, n.y, n.z))
+            for x,y,z in v:
+                f.write(pack("3f", x, y, z))
+            f.write(pack("H", 0))
+
 def write_stl(filepath, vertices, faces):
-    import numpy
-    from stl import mesh
+    try:
+        import numpy
+        from stl import mesh
+    except ImportError:
+        write_stl_binary(filepath, vertices, faces)
+        return
     v = numpy.array(vertices)
     f = numpy.array(faces)
     me = mesh.Mesh(numpy.zeros(f.shape[0], dtype=mesh.Mesh.dtype))
@@ -68,24 +107,16 @@ def make_arc(ox, oy, radius, angle_start, angle_delta, seglen):
         angle += angle_inc
     return v
 
-class Vec:
-    def __init__(self,x,y=None):
-        self.x = x
-        self.y = y if y is not None else x
-    def length(self):
-        return sqrt(self.x**2 + self.y**2)
-    def fma(self, line, t=1.0):
-        return Vec(self.x + line.x*t, self.y + line.y*t)
-
+"""
 def rounded_corner(a, b, c, round_radius):
-    """ Create vertices on path a-b-c but curve the path so it doesn't touch b """
+    "" Create vertices on path a-b-c but curve the path so it doesn't touch b ""
     one = Vec(1.0)
     ab = Vec(b.fma(a,-1.0))
     bc = Vec(c.fma(b,-1.0))
     ab_n = one.fma(ab, 1.0/ab.length())
     bc_n = one.fma(ab, 1.0/ab.length())
-
     a + ab_n*t = c - bc_n*g
+"""
 
 def translated(verts, off_x, c, s):
     result = []
@@ -334,7 +365,7 @@ def thread(args):
 def main():
     from argparse import ArgumentParser
     p=ArgumentParser()
-    p.add_argument("output", nargs="+")
+    p.add_argument("output", nargs="*")
     # defaults are for 1.25" pipe
     k=1.0
     k=0.3 #test
@@ -349,6 +380,7 @@ def main():
     p.add_argument("-l", "--thread-length", nargs=1, type=float, default=20)
     p.add_argument("-s", "--segment-length", nargs=1, type=float, default=0.05)
     p.add_argument("-n", "--num-revolutions", nargs=1, type=int, help="alternative to --thread-length")
+    p.add_argument("-e", "--export", nargs=2, type=str, action="append", help="export as FORMAT to FILE", metavar=("FORMAT","FILE"))
     args = p.parse_args()
 
     # sadflkjasdf test
@@ -357,13 +389,25 @@ def main():
 
     verts,faces = thread(args)
 
-    exporters = {".obj":write_obj, ".off":write_off, ".stl":write_stl}
+    exporters = {
+        "obj":write_obj,
+        "off":write_off,
+        "stl":write_stl,
+        "stlb":write_stl_binary,
+    }
 
     for fn in args.output:
-        print(fn)
-        ext = fn[-4:]
+        ext = fn[-3:]
+        print("Output to:", fn)
         func=exporters.get(ext, write_obj)
         func(fn, verts, faces)
+
+    for e,fn in args.export:
+        if e in exporters:
+            print("Output with explicit filetype:", e, fn)
+            exporters[e](fn, verts, faces)
+        else:
+            print("No such exporter:", e)
 
 if __name__ == "__main__":
     main()
