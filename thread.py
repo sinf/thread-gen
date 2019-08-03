@@ -68,6 +68,25 @@ def make_arc(ox, oy, radius, angle_start, angle_delta, seglen):
         angle += angle_inc
     return v
 
+class Vec:
+    def __init__(self,x,y=None):
+        self.x = x
+        self.y = y if y is not None else x
+    def length(self):
+        return sqrt(self.x**2 + self.y**2)
+    def fma(self, line, t=1.0):
+        return Vec(self.x + line.x*t, self.y + line.y*t)
+
+def rounded_corner(a, b, c, round_radius):
+    """ Create vertices on path a-b-c but curve the path so it doesn't touch b """
+    one = Vec(1.0)
+    ab = Vec(b.fma(a,-1.0))
+    bc = Vec(c.fma(b,-1.0))
+    ab_n = one.fma(ab, 1.0/ab.length())
+    bc_n = one.fma(ab, 1.0/ab.length())
+
+    a + ab_n*t = c - bc_n*g
+
 def translated(verts, off_x, c, s):
     result = []
     for x,y,z in verts:
