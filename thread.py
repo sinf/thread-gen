@@ -200,52 +200,47 @@ def iso_metric_thread(D,P):
     """
     H = sqrt(3)/2.0*P
     y_p = D/2 - H/2
-
-    x0 = 1/2*P
-    x1 = 3/8*P
-    x2 = 1/16*P
-
+    print("ISO metric thread")
+    print("major diameter (before offset):", D)
+    print("minor diameter (before offset):", D-H)
     x0 = 5/8*P
     x1 = 3/8*P
     x2 = 1/16*P
     x3 = -x2
     x4 = -x1
-
     y0 = -1/4*H + y_p
     y1 = 3/8*H + y_p
+    return [(x0,y0),(x1,y0),(x2,y1),(x3,y1),(x4,y0)], P
 
-    v_profile_2d = [(x0,y0),(x1,y0),(x2,y1),(x3,y1),(x4,y0)]
-
-    return v_profile_2d, P
+preset_table={
+"m2"         :  (iso_metric_thread, (2.0, 0.40)),
+"m2-fine"    :  (iso_metric_thread, (2.0, 0.25)),
+"m2.5"       :  (iso_metric_thread, (2.5, 0.45)),
+"m2.5-fine"  :  (iso_metric_thread, (2.5, 0.35)),
+"m3"         :  (iso_metric_thread, (3.0, 0.50)),
+"m3-fine"    :  (iso_metric_thread, (3.0, 0.35)),
+"m4"         :  (iso_metric_thread, (4.0, 0.50)),
+"m4-fine"    :  (iso_metric_thread, (4.0, 0.35)),
+"m5"         :  (iso_metric_thread, (5.0, 0.80)),
+"m5-fine"    :  (iso_metric_thread, (5.0, 0.50)),
+"m6"         :  (iso_metric_thread, (6.0, 1.00)),
+"m6-fine"    :  (iso_metric_thread, (6.0, 0.75)),
+"m8"         :  (iso_metric_thread, (8.0, 1.00)),
+"m8-fine"    :  (iso_metric_thread, (8.0, 0.75)),
+"m10"        :  (iso_metric_thread, (10., 1.50)),
+"m10-fine"   :  (iso_metric_thread, (10., 1.25)),
+"m10-finer"  :  (iso_metric_thread, (10., 1.00)),
+"m12"        :  (iso_metric_thread, (12., 1.75)),
+"m12-fine"   :  (iso_metric_thread, (12., 1.50)),
+"m12-finer"  :  (iso_metric_thread, (12., 1.25)),
+}
 
 def get_2d_profile(preset):
-    table={
-    "m2"         :  (iso_metric_thread, (2.0, 0.40)),
-    "m2-fine"    :  (iso_metric_thread, (2.0, 0.25)),
-    "m2.5"       :  (iso_metric_thread, (2.5, 0.45)),
-    "m2.5-fine"  :  (iso_metric_thread, (2.5, 0.35)),
-    "m3"         :  (iso_metric_thread, (3.0, 0.50)),
-    "m3-fine"    :  (iso_metric_thread, (3.0, 0.35)),
-    "m4"         :  (iso_metric_thread, (4.0, 0.50)),
-    "m4-fine"    :  (iso_metric_thread, (4.0, 0.35)),
-    "m5"         :  (iso_metric_thread, (5.0, 0.80)),
-    "m5-fine"    :  (iso_metric_thread, (5.0, 0.50)),
-    "m6"         :  (iso_metric_thread, (6.0, 1.00)),
-    "m6-fine"    :  (iso_metric_thread, (6.0, 0.75)),
-    "m8"         :  (iso_metric_thread, (8.0, 1.00)),
-    "m8-fine"    :  (iso_metric_thread, (8.0, 0.75)),
-    "m10"        :  (iso_metric_thread, (10., 1.50)),
-    "m10-fine"   :  (iso_metric_thread, (10., 1.25)),
-    "m10-finer"  :  (iso_metric_thread, (10., 1.00)),
-    "m12"        :  (iso_metric_thread, (12., 1.75)),
-    "m12-fine"   :  (iso_metric_thread, (12., 1.50)),
-    "m12-finer"  :  (iso_metric_thread, (12., 1.25)),
-    }
     preset = preset.lower()
-    if preset not in table:
+    if preset not in preset_table:
         print("Unknown preset:", preset)
     else:
-        func, params = table[preset]
+        func, params = preset_table[preset]
         return func(*params)
 
 def thread(args):
@@ -279,11 +274,17 @@ def main():
     from argparse import ArgumentParser
     p=ArgumentParser()
     p.add_argument("output", nargs="*")
-    p.add_argument("-t", "--thread-preset", nargs=1, type=str, default="m4", help="M<integer> code")
+    p.add_argument("-t", "--thread-preset", nargs=1, type=str, help="M<integer> code")
     p.add_argument("-l", "--thread-length", nargs=1, type=float, default=15, help="Length of the construct")
-    p.add_argument("-s", "--segment-length", nargs=1, type=float, default=0.05, help="Maximum length for a segment. Controls the final vertex count")
+    p.add_argument("-s", "--segment-length", nargs=1, type=float, default=0.2, help="Maximum length for a segment. Controls the final vertex count")
     p.add_argument("-y", "--offset", nargs=1, type=float, default=0.0, help="offset to add to y coordinates. For external thread offset<0 (bolt). For internal thread offset>0 (nut, thread is CSG-subtracted from a solid).")
     args = p.parse_args()
+
+    if args.thread_preset is None:
+        print("Thread presets:")
+        for k in preset_table.keys():
+            print(k)
+        exit(0)
 
     verts,faces = thread(args)
 
