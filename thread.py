@@ -9,47 +9,35 @@ class Vec:
     def length(self):
         return sqrt(self.x**2 + self.y**2 + self.z**2)
     def fma(self, other, t=1.0):
-        return Vec(
-            self.x + other.x*t,
-            self.y + other.y*t,
-            self.z + other.z*t)
+        return Vec(self.x + other.x*t, self.y + other.y*t, self.z + other.z*t)
     def cross(self, other):
         return Vec(
             self.y*other.z - other.y*self.z,
             other.x*self.z - self.x*other.z,
             self.x*other.y - other.x*self.y)
+    def __mul__(self, t):
+        return Vec(self.x*t, self.y*t, self.z*t)
+    def __add__(self, other):
+        return self.fma(other,1.0)
+    def __sub__(self, other):
+        return self.fma(other,-1.0)
+    def n(self):
+        return self * (1.0/self.length())
 
-def write_stl_binary(filepath, vertices, faces):
+def write_stl(filepath, vertices, faces):
+    """ header is junk, positive octant rule ignored, triangle sorting rule ignored """
     from struct import pack
     with open(filepath,"wb") as f:
-        # header is junk
-        # positive octant rule ignored
-        # triangle sorting rule ignored
         f.write(pack("<80xL", len(faces)))
         for face in faces:
             v = [vertices[i] for i in face]
             v0,v1,v2 = Vec(*v[0]), Vec(*v[1]), Vec(*v[2])
-            n = v1.fma(v0,-1.).cross(v2.fma(v1,-1.))
-            n = Vec(0.).fma(n, 1.0/n.length())
+            n = (v1-v0).cross(v2-v1)
+            n = n * (1.0/n.length())
             f.write(pack("3f", n.x, n.y, n.z))
             for x,y,z in v:
                 f.write(pack("3f", x, y, z))
             f.write(pack("H", 0))
-
-def write_stl(filepath, vertices, faces):
-    try:
-        import numpy
-        from stl import mesh
-    except ImportError:
-        write_stl_binary(filepath, vertices, faces)
-        return
-    v = numpy.array(vertices)
-    f = numpy.array(faces)
-    me = mesh.Mesh(numpy.zeros(f.shape[0], dtype=mesh.Mesh.dtype))
-    for i, f in enumerate(f):
-        for j in range(3):
-            me.vectors[i][j] = v[f[j],:]
-    me.save(filepath)
 
 def write_obj(filepath, vertices, faces):
     with open(filepath,"w") as f:
@@ -62,6 +50,7 @@ def write_obj(filepath, vertices, faces):
             f.write("\n")
 
 def write_off(filepath, vertices, faces):
+    """ supported by OpenSCAD. maybe faster than STL because of index array """
     with open(filepath,"w") as f:
         f.write("OFF\n")
         f.write("%d %d 0\n" % (len(vertices),len(faces)))
@@ -74,12 +63,13 @@ def write_off(filepath, vertices, faces):
             f.write("\n")
 
 def write_verts_xy(filepath, vertices):
+    """ for use with gnuplot """
     with open(filepath,"w") as f:
         for x,y,z in vertices:
             f.write("%.10f %.10f\n" % (x,y))
 
-# connect 2 paths (=index arrays) with quads
 def quad_strip(idx_a, idx_b):
+    """ connect 2 paths (=index arrays) with quads """
     faces = []
     idx_a = iter(idx_a)
     idx_b = iter(idx_b)
@@ -107,16 +97,24 @@ def make_arc(ox, oy, radius, angle_start, angle_delta, seglen):
         angle += angle_inc
     return v
 
-"""
-def rounded_corner(a, b, c, round_radius):
-    "" Create vertices on path a-b-c but curve the path so it doesn't touch b ""
-    one = Vec(1.0)
-    ab = Vec(b.fma(a,-1.0))
-    bc = Vec(c.fma(b,-1.0))
-    ab_n = one.fma(ab, 1.0/ab.length())
-    bc_n = one.fma(ab, 1.0/ab.length())
-    a + ab_n*t = c - bc_n*g
-"""
+def cubic_bezier(x0, y0, x1, y1, x2, y2, x3, y3, n):
+    pts = []
+    for i in range(n):
+        t = i / (n-1)
+        a = (1. - t)**3
+        b = 3. * t * (1. - t)**2
+        c = 3.0 * t**2 * (1.0 - t)
+        d = t**3
+        x = a * x0 + b * x1 + c * x2 + d * x3
+        y = a * y0 + b * y1 + c * y2 + d * y3
+        pts += [x,y]
+    return pts
+
+def rounded_corner(ax, ay, bx, by, cx, cy, dx, dy, r):
+    a,b,c,d = Vec(ax,ay), Vec(bx,by), Vec(cx,cy), Vec(dx,dy)
+    p0 = b + (a-b).n() * r
+    p1 = c + (d-c).n() * r
+    return [(ax,ay),cubic_bezier(p0.x,p0.y,bx,by,cx,cy,p1.x,p1.y),(dx,dy)]
 
 def translated(verts, off_x, c, s):
     result = []
@@ -193,19 +191,6 @@ def polygon_tris(verts):
         faces += [(v0,v1,v2)]
         v1 = v2
     return faces
-
-def cubicbezier(self, x0, y0, x1, y1, x2, y2, x3, y3, n):
-    pts = []
-    for i in range(n):
-        t = i / (n-1)
-        a = (1. - t)**3
-        b = 3. * t * (1. - t)**2
-        c = 3.0 * t**2 * (1.0 - t)
-        d = t**3
-        x = a * x0 + b * x1 + c * x2 + d * x3
-        y = a * y0 + b * y1 + c * y2 + d * y3
-        pts += [x,y]
-    return pts
 
 def rounded_part(below, a, h):
     if below:
