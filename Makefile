@@ -1,26 +1,26 @@
 
-KIERRE=kierre1.25in.off kierre1.25in.obj kierre1.25in.stl
-STUFF=$(KIERRE) liitin.stl
 .PHONY: all clean plot
+
+all: liitin.stl
 
 plot: vertices.ps
 	nohup okular $< >/dev/null 2>&1 &
 
-all: $(STUFF)
-
 clean:
-	rm -fv $(STUFF)
+	rm -fv $(wildcard *.stl)
 
-liitin.stl: liitin.scad kierre1.25in.stl
+m12x20m.stl: thread.py Makefile
+	python3 thread.py -t m12 -l 20 -y -0.2 -s 0.6 -z m12x20m.stl
+	python3 thread.py -t m12 -l 20 -y 0.2 -s 0.6 -z m12x20f.stl
+
+m12x20f.stl: m12x20m.stl
+
+
+liitin.stl: liitin.scad m12x20m.stl m12x20f.stl
 	openscad -o $@ $<
 
 #	openscad -o liitin.csg $<
 #	hob3l liitin.csg -o $@
-
-kierre1.25in.%: thread.py
-	python3 thread.py $(KIERRE)
-
-vertices.dat: kierre1.25in.stl
 
 vertices.ps: vertices.dat plot.p
 	rm -f $@

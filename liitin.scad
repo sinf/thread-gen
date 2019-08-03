@@ -6,15 +6,30 @@ module english_thread (diameter=0.25, threads_per_inch=20, length=1,
                       leadfac=1.0, test=false)
 */
 
-$fn=100;
-
-module kierre() {
-	import("kierre1.25in.stl");
+translate([40,0,0])
+intersection() {
+	cube([99,99,20],center=true);
+	import("m12x20m.stl");
 }
 
+translate([-40,0,0])
 difference() {
-	cylinder(h=10, d=30, center=true);
-	rotate(90,[0,1,0]) translate([-10,0,0]) kierre();
+	cylinder(h=20, d=16, center=true, $fn=60);
+	import("m12x20f.stl");
 }
 
+translate([0,40,0])
+difference() {
+	intersection() {
+		import("m12x20f.stl");
+		cube([99,99,19],center=true);
+	}
+	import("m12x20m.stl");
+}
+
+translate([80,0,0])
+difference() {
+	import("m12x20m.stl");
+	cube([99,99,20],center=true);
+}
 

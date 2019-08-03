@@ -28,7 +28,7 @@ def write_stl(filepath, vertices, faces):
     """ header is junk, positive octant rule ignored, triangle sorting rule ignored """
     from struct import pack
     with open(filepath,"wb") as f:
-        f.write(pack("<80sL", (b'stl'*27)[:80], len(faces)))
+        f.write(pack("<80sL", (b'STL'*27)[:80], len(faces)))
         for face in faces:
             v = [vertices[i] for i in face]
             v0,v1,v2 = Vec(*v[0]), Vec(*v[1]), Vec(*v[2])
@@ -247,19 +247,30 @@ def thread(args):
     verts=[]
     faces=[]
 
-    v_profile_2d, thread_pitch = get_2d_profile(args.thread_preset[0])
+    preset = args.thread_preset[0]
+    thread_length = args.thread_length[0]
+    seglen = args.segment_length[0]
+    offset_y = args.offset[0]
+
+    v_profile_2d, thread_pitch = get_2d_profile(preset)
 
     max_y = max(v[1] for v in v_profile_2d)
     min_y = min(v[1] for v in v_profile_2d)
 
-    revolution_steps = int(2*pi*max_y / args.segment_length)
-    rev_angle = 2*pi / revolution_steps
-    rev_step_x = thread_pitch / revolution_steps
-    total_steps = int(args.thread_length / rev_step_x)
-    num_revolutions=total_steps // revolution_steps
+    revolution_steps = ceil(2*pi*max_y / seglen)
+    step_angle = 2*pi / revolution_steps
+    step_x = thread_pitch / revolution_steps
 
-    v_profile_2d_z = [(x,y+args.offset,0) for x,y in v_profile_2d]
-    v,f=revolve_solid(v_profile_2d_z, total_steps, rev_step_x, rev_angle, revolution_steps)
+
+    num_revolutions = ceil(thread_length / thread_pitch) + 2
+    offset_x = -thread_pitch - thread_length/2
+    total_steps = num_revolutions * revolution_steps
+
+    v_profile_2d_z = [(x+offset_x,y+offset_y,0) for x,y in v_profile_2d]
+    v,f=revolve_solid(v_profile_2d_z, total_steps, step_x, step_angle, revolution_steps)
+
+    if args.z_major:
+        v = [(a[2],-a[1],a[0]) for a in v]
 
     print("thread pitch: %.8f" % thread_pitch)
     print("y coords range: [%.8f, %.8f]" % (min_y, max_y))
@@ -275,9 +286,10 @@ def main():
     p=ArgumentParser()
     p.add_argument("output", nargs="*")
     p.add_argument("-t", "--thread-preset", nargs=1, type=str, help="M<integer> code")
-    p.add_argument("-l", "--thread-length", nargs=1, type=float, default=15, help="Length of the construct")
-    p.add_argument("-s", "--segment-length", nargs=1, type=float, default=0.2, help="Maximum length for a segment. Controls the final vertex count")
-    p.add_argument("-y", "--offset", nargs=1, type=float, default=0.0, help="offset to add to y coordinates. For external thread offset<0 (bolt). For internal thread offset>0 (nut, thread is CSG-subtracted from a solid).")
+    p.add_argument("-l", "--thread-length", nargs=1, type=float, default=[15], help="Length of the usable thread (total length is slightly longer)")
+    p.add_argument("-s", "--segment-length", nargs=1, type=float, default=[0.2], help="Maximum length for a segment. Controls the final vertex count")
+    p.add_argument("-y", "--offset", nargs=1, type=float, default=[0.0], help="offset to add to y coordinates. For external thread offset<0 (bolt). For internal thread offset>0 (nut, thread is CSG-subtracted from a solid).")
+    p.add_argument("-z", "--z-major", action="store_true", help="have the bolt be parallel to Z axis instead of X")
     args = p.parse_args()
 
     if args.thread_preset is None:
