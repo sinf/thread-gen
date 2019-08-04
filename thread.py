@@ -200,18 +200,54 @@ def iso_metric_thread(cmd_args, D,P):
     """
     H = sqrt(3)/2.0*P
     y_p = D/2 - H/2
+
     print("ISO metric thread")
     print("major diameter (before offset):", D)
     print("minor diameter (before offset):", D-H)
+
     #x0 = 5/8*P
     x1 = 3/8*P
     x2 = 1/16*P
-    x3 = -x2
-    x4 = -x1
     y0 = -1/4*H + y_p
     y1 = 3/8*H + y_p
-    return [(x1,y0),(x2,y1),(x3,y1),(x4,y0)], P, pi/3
-    #return [(x0,y0),(x1,y0),(x2,y1),(x3,y1),(x4,y0)], P
+
+    tol_x = cmd_args.tolerance_x[0]
+    tol_y = cmd_args.tolerance_y[0]
+
+    # if both internal and external thread use the same tolerance,
+    # then tolerance needs to be halved
+    tol_x *= 0.5
+    tol_y *= 0.5
+
+    off_sign = 1 if cmd_args.internal else -1
+    off_x = off_sign * tol_x
+    off_y = off_sign * tol_y
+
+    if off_x < -x2:
+        # x tolerance > width of tip
+        # so the flat tip needs to be turned into a sharp triangle
+        # surplus is converted to y offset to meet tolerance
+        off_y += tan(pi/3) * (off_x + x2)
+        off_x = -x2
+        x1 += off_x
+        x2 = 0
+        y0 += off_y
+        y1 += off_y
+        verts = [(x1,y0),(x2,y1),(-x1,y0)]
+    else:
+        # offset >= 0
+        x1 += off_x
+        x2 += off_x
+        max_x = 1/2*P - 1e-6
+        if x1 > max_x:
+            # clip the line going down to the valley
+            x1 = max_x
+            y0 = H/2 - x1 * tan(pi/3)
+        y0 += off_y
+        y1 += off_y
+        verts = [(x1,y0),(x2,y1),(-x2,y1),(-x1,y0)]
+
+    return verts, P
 
 def rotate_90deg_ccw(x,y):
     return -y, x
@@ -294,19 +330,8 @@ def thread(args):
     preset = args.thread_preset[0]
     thread_length = args.thread_length[0]
     seglen = args.segment_length[0]
-    tol_x = args.tolerance_x[0]
-    tol_y = args.tolerance_y[0]
 
-    v_profile_2d,thread_pitch,angle = get_2d_profile(args, preset)
-
-    offset_x = 0
-    offset_y = max(tol_x * tan(angle), tol_y)
-    offset_y = offset_y if args.internal else -offset_y
-    # if both internal and external thread use the same tolerance,
-    # then offset needs to be halved
-    offset_y *= 0.5
-
-    print("offset y: %.8f" % offset_y)
+    v_profile_2d, thread_pitch = get_2d_profile(args, preset)
 
     if args.output_2d:
         print("Dumping 2d vertices to", args.output_2d[0])
@@ -314,12 +339,13 @@ def thread(args):
             for x,y in v_profile_2d:
                 f.write("%.10f %.10f\n" % (x,y))
 
-    # center the object along X axis
-    offset_x -= thread_pitch + thread_length/2
+    center_x = thread_pitch + thread_length/2
 
-    v_profile_2d_z = [(x+offset_x,y+offset_y,0) for x,y in v_profile_2d]
+    # add z coordinates
+    v_profile_2d_z = [(x-center_x,y,0) for x,y in v_profile_2d]
 
     num_revolutions = ceil(thread_length / thread_pitch) + 2
+
     max_y = max(v[1] for v in v_profile_2d_z)
     min_y = min(v[1] for v in v_profile_2d_z)
     revolution_steps = ceil(2*pi*max_y / seglen)
@@ -327,22 +353,22 @@ def thread(args):
     step_x = thread_pitch / revolution_steps
     total_steps = num_revolutions * revolution_steps
 
-    v,f=revolve_solid(v_profile_2d_z, total_steps, step_x, step_angle, revolution_steps)
-
-    if args.z_major:
-        v = [(a[2],-a[1],a[0]) for a in v]
-
     print("thread pitch: %.8f" % thread_pitch)
     print("y coords range: [%.8f, %.8f]" % (min_y, max_y))
-
-    print("vertices before offset:", len(v_profile_2d))
-    print("vertices after offset:", len(v_profile_2d_z))
 
     print("revolutions:", num_revolutions)
     print("steps/revolution:", revolution_steps)
 
+    from os import getpid
+    print("process id:", getpid())
+
+    v,f=revolve_solid(v_profile_2d_z, total_steps, step_x, step_angle, revolution_steps)
+
     print("total vertices:", len(v))
     print("total facets:", len(f))
+
+    if args.z_major:
+        v = [(a[2],-a[1],a[0]) for a in v]
 
     return v,f
 

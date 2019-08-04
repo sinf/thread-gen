@@ -1,18 +1,22 @@
 
 .PHONY: all clean plot
 
+M=m6
+L=20
+ARGS=-t$(M) -l$(L) -s0.6 -x0.2 -y0.05 -z
+
 all: liitin.stl
 
 clean:
 	rm -fv $(wildcard *.stl) $(wildcard *.obj) vertices.ps vertices.txt
 
-m12x20m.stl: m12x20f.stl
-	python3 thread.py $@ -t m12 -l 20 -s 0.6 -z -x0.2 -y0.05
+$(M)x$(L)m.stl: $(M)x$(L)f.stl
+	python3 thread.py $@ $(ARGS)
 
-m12x20f.stl: thread.py Makefile
-	python3 thread.py $@ -t m12 -l 20 -s 0.6 -z -x0.2 -y0.05 -i
+$(M)x$(L)f.stl: thread.py Makefile
+	python3 thread.py $@ $(ARGS) -i
 
-liitin.stl: liitin.scad m12x20m.stl m12x20f.stl
+liitin.stl: liitin.scad $(M)x$(L)m.stl $(M)x$(L)f.stl
 	openscad -o $@ $<
 
 #	openscad -o liitin.csg $<
