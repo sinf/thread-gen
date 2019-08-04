@@ -8,6 +8,6 @@ set size 1.0, 1.0
 set terminal postscript portrait enhanced mono dashed lw 1 "Helvetica" 14 
 set output "vertices.ps"
 
-plot 'vertices.dat' with linespoints linestyle 1
+plot 'vertices.txt' with linespoints linestyle 1
 
 

@@ -193,7 +193,7 @@ def revolve_solid(shape, num_steps, step_x, step_angle, revolution_steps):
 
     return v,f
 
-def iso_metric_thread(D,P):
+def iso_metric_thread(cmd_args, D,P):
     """
     D: major diameter
     P: thread pitch
@@ -203,14 +203,58 @@ def iso_metric_thread(D,P):
     print("ISO metric thread")
     print("major diameter (before offset):", D)
     print("minor diameter (before offset):", D-H)
-    x0 = 5/8*P
+    #x0 = 5/8*P
     x1 = 3/8*P
     x2 = 1/16*P
     x3 = -x2
     x4 = -x1
     y0 = -1/4*H + y_p
     y1 = 3/8*H + y_p
-    return [(x0,y0),(x1,y0),(x2,y1),(x3,y1),(x4,y0)], P
+    return [(x1,y0),(x2,y1),(x3,y1),(x4,y0)], P, pi/3
+    #return [(x0,y0),(x1,y0),(x2,y1),(x3,y1),(x4,y0)], P
+
+def rotate_90deg_ccw(x,y):
+    return -y, x
+
+def rotate_90deg_cw(x,y):
+    return y, -x
+
+def get_normals_xy(verts):
+    normals = [(0,0)]
+    for i in range(1,len(verts)-1):
+        lx,ly = verts[i+1]
+        rx,ry = verts[i-1]
+        lx,ly = rotate_90deg_cw(lx,ly)
+        rx,ry = rotate_90deg_ccw(rx,ry)
+        nx = lx + rx
+        ny = ly + ry
+        n_len = sqrt(nx*nx + ny*ny)
+        nx /= n_len
+        ny /= n_len
+        normals += [(nx,ny)]
+    normals += [(0,0)]
+    normals[0] = (-normals[1][0], normals[1][1])
+    normals[-1] = normals[1]
+    return normals
+
+def line_intersection(line1, line2):
+    # copy paste from stackoverflow
+    xdiff = (line1[0][0] - line1[1][0], line2[0][0] - line2[1][0])
+    ydiff = (line1[0][1] - line1[1][1], line2[0][1] - line2[1][1])
+    def det(a, b): return a[0]*b[1] - a[1]*b[0];
+    div = det(xdiff, ydiff)
+    d = (det(*line1), det(*line2))
+    x = det(d, xdiff) / div
+    y = det(d, ydiff) / div
+    return x, y
+
+def squash(verts, offset_x, offset_y):
+    normals = get_normals_xy(verts)
+    v2 = []
+    for v,n in zip(verts,normals):
+        v2 += [(v[0]+n[0]*offset_x,v[1]+n[1]*offset_y)]
+    # todo: fix malformed geometry
+    return v2
 
 preset_table={
 "m2"         :  (iso_metric_thread, (2.0, 0.40)),
@@ -235,13 +279,13 @@ preset_table={
 "m12-finer"  :  (iso_metric_thread, (12., 1.25)),
 }
 
-def get_2d_profile(preset):
+def get_2d_profile(cmd_args, preset):
     preset = preset.lower()
     if preset not in preset_table:
         print("Unknown preset:", preset)
     else:
         func, params = preset_table[preset]
-        return func(*params)
+        return func(cmd_args, *params)
 
 def thread(args):
     verts=[]
@@ -250,23 +294,39 @@ def thread(args):
     preset = args.thread_preset[0]
     thread_length = args.thread_length[0]
     seglen = args.segment_length[0]
-    offset_y = args.offset[0]
+    tol_x = args.tolerance_x[0]
+    tol_y = args.tolerance_y[0]
 
-    v_profile_2d, thread_pitch = get_2d_profile(preset)
+    v_profile_2d,thread_pitch,angle = get_2d_profile(args, preset)
 
-    max_y = max(v[1] for v in v_profile_2d)
-    min_y = min(v[1] for v in v_profile_2d)
+    offset_x = 0
+    offset_y = max(tol_x * tan(angle), tol_y)
+    offset_y = offset_y if args.internal else -offset_y
+    # if both internal and external thread use the same tolerance,
+    # then offset needs to be halved
+    offset_y *= 0.5
 
+    print("offset y: %.8f" % offset_y)
+
+    if args.output_2d:
+        print("Dumping 2d vertices to", args.output_2d[0])
+        with open(args.output_2d[0],"w") as f:
+            for x,y in v_profile_2d:
+                f.write("%.10f %.10f\n" % (x,y))
+
+    # center the object along X axis
+    offset_x -= thread_pitch + thread_length/2
+
+    v_profile_2d_z = [(x+offset_x,y+offset_y,0) for x,y in v_profile_2d]
+
+    num_revolutions = ceil(thread_length / thread_pitch) + 2
+    max_y = max(v[1] for v in v_profile_2d_z)
+    min_y = min(v[1] for v in v_profile_2d_z)
     revolution_steps = ceil(2*pi*max_y / seglen)
     step_angle = 2*pi / revolution_steps
     step_x = thread_pitch / revolution_steps
-
-
-    num_revolutions = ceil(thread_length / thread_pitch) + 2
-    offset_x = -thread_pitch - thread_length/2
     total_steps = num_revolutions * revolution_steps
 
-    v_profile_2d_z = [(x+offset_x,y+offset_y,0) for x,y in v_profile_2d]
     v,f=revolve_solid(v_profile_2d_z, total_steps, step_x, step_angle, revolution_steps)
 
     if args.z_major:
@@ -274,8 +334,13 @@ def thread(args):
 
     print("thread pitch: %.8f" % thread_pitch)
     print("y coords range: [%.8f, %.8f]" % (min_y, max_y))
+
+    print("vertices before offset:", len(v_profile_2d))
+    print("vertices after offset:", len(v_profile_2d_z))
+
     print("revolutions:", num_revolutions)
     print("steps/revolution:", revolution_steps)
+
     print("total vertices:", len(v))
     print("total facets:", len(f))
 
@@ -288,8 +353,11 @@ def main():
     p.add_argument("-t", "--thread-preset", nargs=1, type=str, help="M<integer> code")
     p.add_argument("-l", "--thread-length", nargs=1, type=float, default=[15], help="Length of the usable thread (total length is slightly longer)")
     p.add_argument("-s", "--segment-length", nargs=1, type=float, default=[0.2], help="Maximum length for a segment. Controls the final vertex count")
-    p.add_argument("-y", "--offset", nargs=1, type=float, default=[0.0], help="offset to add to y coordinates. For external thread offset<0 (bolt). For internal thread offset>0 (nut, thread is CSG-subtracted from a solid).")
+    p.add_argument("-i", "--internal", action="store_true", help="set thread to be internal (nut / to be CSG-subtracted from a solid) instead of external (bolt / to be CSG-unioned to a solid)")
+    p.add_argument("-x", "--tolerance-x", nargs=1, type=float, default=[0.12], help="Tolerance along length of the screw")
+    p.add_argument("-y", "--tolerance-y", nargs=1, type=float, default=[0.0], help="Tolerance along diameter of the screw")
     p.add_argument("-z", "--z-major", action="store_true", help="have the bolt be parallel to Z axis instead of X")
+    p.add_argument("-2", "--output-2d", nargs=1, type=str, help="write XY vertices to this file")
     args = p.parse_args()
 
     if args.thread_preset is None:
