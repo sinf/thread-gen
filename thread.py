@@ -224,10 +224,11 @@ def iso_metric_thread(cmd_args, D,P):
     off_y = off_sign * tol_y
 
     if off_x < -x2:
-        # x tolerance > width of tip
+        # external thread: negative offset
+        # x tolerance exceeds width of tip
         # so the flat tip needs to be turned into a sharp triangle
         # surplus is converted to y offset to meet tolerance
-        off_y += tan(pi/3) * (off_x + x2)
+        off_y = min(off_y, tan(pi/3) * (off_x + x2))
         off_x = -x2
         x1 += off_x
         x2 = 0
@@ -235,7 +236,7 @@ def iso_metric_thread(cmd_args, D,P):
         y1 += off_y
         verts = [(x1,y0),(x2,y1),(-x1,y0)]
     else:
-        # offset >= 0
+        # internal thread: positive offset
         x1 += off_x
         x2 += off_x
         max_x = 1/2*P - 1e-6
