@@ -201,18 +201,20 @@ def iso_metric_thread(cmd_args, D,P):
     H = sqrt(3)/2.0*P
     y_p = D/2 - H/2
 
-    print("ISO metric thread")
-    print("major diameter (before offset):", D)
-    print("minor diameter (before offset):", D-H)
-
     #x0 = 5/8*P
     x1 = 3/8*P
     x2 = 1/16*P
     y0 = -1/4*H + y_p
     y1 = 3/8*H + y_p
 
-    tol_x = cmd_args.tolerance_x[0]
-    tol_y = cmd_args.tolerance_y[0]
+    tol_x = cmd_args.tolerance_x[0] / 1000
+    tol_y = cmd_args.tolerance_y[0] / 1000
+
+    print("ISO metric thread")
+    print("major diameter (before offset):", D)
+    print("minor diameter (before offset):", D-H)
+    print("tolerance x:", tol_x)
+    print("tolerance y:", tol_y)
 
     # if both internal and external thread use the same tolerance,
     # then tolerance needs to be halved
@@ -256,43 +258,6 @@ def rotate_90deg_ccw(x,y):
 def rotate_90deg_cw(x,y):
     return y, -x
 
-def get_normals_xy(verts):
-    normals = [(0,0)]
-    for i in range(1,len(verts)-1):
-        lx,ly = verts[i+1]
-        rx,ry = verts[i-1]
-        lx,ly = rotate_90deg_cw(lx,ly)
-        rx,ry = rotate_90deg_ccw(rx,ry)
-        nx = lx + rx
-        ny = ly + ry
-        n_len = sqrt(nx*nx + ny*ny)
-        nx /= n_len
-        ny /= n_len
-        normals += [(nx,ny)]
-    normals += [(0,0)]
-    normals[0] = (-normals[1][0], normals[1][1])
-    normals[-1] = normals[1]
-    return normals
-
-def line_intersection(line1, line2):
-    # copy paste from stackoverflow
-    xdiff = (line1[0][0] - line1[1][0], line2[0][0] - line2[1][0])
-    ydiff = (line1[0][1] - line1[1][1], line2[0][1] - line2[1][1])
-    def det(a, b): return a[0]*b[1] - a[1]*b[0];
-    div = det(xdiff, ydiff)
-    d = (det(*line1), det(*line2))
-    x = det(d, xdiff) / div
-    y = det(d, ydiff) / div
-    return x, y
-
-def squash(verts, offset_x, offset_y):
-    normals = get_normals_xy(verts)
-    v2 = []
-    for v,n in zip(verts,normals):
-        v2 += [(v[0]+n[0]*offset_x,v[1]+n[1]*offset_y)]
-    # todo: fix malformed geometry
-    return v2
-
 preset_table={
 "m2"         :  (iso_metric_thread, (2.0, 0.40)),
 "m2-fine"    :  (iso_metric_thread, (2.0, 0.25)),
@@ -330,7 +295,7 @@ def thread(args):
 
     preset = args.thread_preset[0]
     thread_length = args.thread_length[0]
-    seglen = args.segment_length[0]
+    seglen = args.segment_length[0] / 1000
 
     v_profile_2d, thread_pitch = get_2d_profile(args, preset)
 
@@ -350,10 +315,15 @@ def thread(args):
     max_y = max(v[1] for v in v_profile_2d_z)
     min_y = min(v[1] for v in v_profile_2d_z)
     revolution_steps = ceil(2*pi*max_y / seglen)
+
+    revolution_steps = min(revolution_steps, 5000)
+    revolution_steps = max(revolution_steps, 16)
+
     step_angle = 2*pi / revolution_steps
     step_x = thread_pitch / revolution_steps
     total_steps = num_revolutions * revolution_steps
 
+    print("max segment length:", seglen)
     print("thread pitch: %.8f" % thread_pitch)
     print("y coords range: [%.8f, %.8f]" % (min_y, max_y))
 
@@ -378,11 +348,11 @@ def main():
     p=ArgumentParser()
     p.add_argument("output", nargs="*")
     p.add_argument("-t", "--thread-preset", nargs=1, type=str, help="M<integer> code")
-    p.add_argument("-l", "--thread-length", nargs=1, type=float, default=[15], help="Length of the usable thread (total length is slightly longer)")
-    p.add_argument("-s", "--segment-length", nargs=1, type=float, default=[0.2], help="Maximum length for a segment. Controls the final vertex count")
+    p.add_argument("-l", "--thread-length", nargs=1, type=float, default=[15], help="Length of the usable thread (total length is slightly longer) as millimeters")
+    p.add_argument("-s", "--segment-length", nargs=1, type=float, default=[200], help="Maximum length for a segment as micrometers. Controls the final vertex count")
     p.add_argument("-i", "--internal", action="store_true", help="set thread to be internal (nut / to be CSG-subtracted from a solid) instead of external (bolt / to be CSG-unioned to a solid)")
-    p.add_argument("-x", "--tolerance-x", nargs=1, type=float, default=[0.12], help="Tolerance along length of the screw")
-    p.add_argument("-y", "--tolerance-y", nargs=1, type=float, default=[0.0], help="Tolerance along diameter of the screw")
+    p.add_argument("-x", "--tolerance-x", nargs=1, type=float, default=[120], help="Tolerance along length of the screw as micrometers")
+    p.add_argument("-y", "--tolerance-y", nargs=1, type=float, default=[15], help="Tolerance along diameter of the screw as micrometers")
     p.add_argument("-z", "--z-major", action="store_true", help="have the bolt be parallel to Z axis instead of X")
     p.add_argument("-2", "--output-2d", nargs=1, type=str, help="write XY vertices to this file")
     args = p.parse_args()
@@ -406,6 +376,9 @@ def main():
         print("Output to:", fn)
         func=exporters.get(ext, write_obj)
         func(fn, verts, faces)
+
+    if len(args.output) == 0:
+    	print("No output files")
 
 if __name__ == "__main__":
     main()

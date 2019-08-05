@@ -3,7 +3,7 @@
 
 M=m6
 L=20
-ARGS=-t$(M) -l$(L) -s0.6 -x0.2 -y0.05 -z
+ARGS=-t$(M) -l$(L) -s600 -x200 -y50 -z
 
 all: liitin.stl
 
@@ -19,6 +19,10 @@ $(M)x$(L)f.stl: thread.py Makefile
 liitin.stl: liitin.scad $(M)x$(L)m.stl $(M)x$(L)f.stl
 	openscad -o $@ $<
 
+tolerance_test.stl: tolerance_test.scad tolerance_test.sh thread.py
+	sh ./tolerance_test.sh
+	openscad -o $@ $<
+
 #	openscad -o liitin.csg $<
 #	hob3l liitin.csg -o $@
 
@@ -30,5 +34,5 @@ vertices.ps: vertices.txt plot.p
 	gnuplot plot.p
 
 vertices.txt: thread.py Makefile
-	python3 thread.py --output-2d $@ -t m12 -l 20
+	python3 thread.py --output-2d $@ -t m12 -l20
 
