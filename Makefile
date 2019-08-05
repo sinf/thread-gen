@@ -19,8 +19,7 @@ $(M)x$(L)f.stl: thread.py Makefile
 liitin.stl: liitin.scad $(M)x$(L)m.stl $(M)x$(L)f.stl
 	openscad -o $@ $<
 
-tolerance_test.stl: tolerance_test.scad tolerance_test.sh thread.py
-	sh ./tolerance_test.sh
+tolerance_test.stl: tolerance_test.scad thread.py
 	openscad -o $@ $<
 
 #	openscad -o liitin.csg $<

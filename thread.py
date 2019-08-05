@@ -216,11 +216,6 @@ def iso_metric_thread(cmd_args, D,P):
     print("tolerance x:", tol_x)
     print("tolerance y:", tol_y)
 
-    # if both internal and external thread use the same tolerance,
-    # then tolerance needs to be halved
-    tol_x *= 0.5
-    tol_y *= 0.5
-
     off_sign = 1 if cmd_args.internal else -1
     off_x = off_sign * tol_x
     off_y = off_sign * tol_y
@@ -245,7 +240,8 @@ def iso_metric_thread(cmd_args, D,P):
         if x1 > max_x:
             # clip the line going down to the valley
             x1 = max_x
-            y0 = H/2 - x1 * tan(pi/3)
+            y0 = H/2 - x1 * tan(pi/3) + y_p
+            print("clipping internal thread x1")
         y0 += off_y
         y1 += off_y
         verts = [(x1,y0),(x2,y1),(-x2,y1),(-x1,y0)]
