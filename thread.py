@@ -239,9 +239,10 @@ def iso_metric_thread(cmd_args, D,P):
         max_x = 1/2*P - 1e-6
         if x1 > max_x:
             # clip the line going down to the valley
+            dy = (x1-max_x) * tan(pi/3)
+            y0 += dy
+            print("clipping internal thread x1; x1=%.8f, max_x=%.8f, dy=%.8f" % (x1,max_x,dy))
             x1 = max_x
-            y0 = H/2 - x1 * tan(pi/3) + y_p
-            print("clipping internal thread x1")
         y0 += off_y
         y1 += off_y
         verts = [(x1,y0),(x2,y1),(-x2,y1),(-x1,y0)]

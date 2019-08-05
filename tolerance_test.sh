@@ -2,9 +2,9 @@
 
 set -x
 mkdir -pv tolerance_test
+rm -f tolerance_test/*.stl
 
-tol_radial="10 30 60 100"
-tol_layer="50 70 90 110 150 170 200 220"
+eval "$(head -n2 tolerance_test.scad | sed 's/\[/"/;s/\]/"/;s/,//g')"
 
 for tr in $tol_radial; do
 	for tl in $tol_layer; do

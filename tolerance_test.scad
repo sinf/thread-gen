@@ -1,10 +1,9 @@
-
-
-// microns
-tol_radial=[10, 30, 60, 100];
+tol_radial=[25, 50, 100, 150];
 tol_layer=[50, 70, 90, 110, 150, 170, 200, 220];
-columns = 4;
-rows = 8;
+// above: microns. must be the first 2 lines
+
+columns = len(tol_radial);
+rows = len(tol_layer);
 
 font = "Noto Sans UI:style=Bold";
 //use <pcf6x13B.ttf>; font = "pcf6x13B";
@@ -65,10 +64,10 @@ difference() {
 	// engrave text
 	translate([0,0,z_text])
 	linear_extrude(100.0) {
-		for(col=[0:columns-1])
-			number_label(col*(d+spacing), -d-spacing+3, "center", "top", str(tol_radial[col]));
-		for(row=[0:rows-1])
-			number_label(-d-spacing+4,row*(d+spacing),"right", "center", str(tol_layer[row]));
+		for(c=[0:columns-1])
+			number_label(c*(d+spacing), -d-spacing+3, "center", "top", str(tol_radial[c]));
+		for(r=[0:rows-1])
+			number_label(-d-spacing+4,r*(d+spacing),"right", "center", str(tol_layer[r]));
 	}
 }
 
