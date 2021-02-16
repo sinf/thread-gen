@@ -290,11 +290,14 @@ def thread(args):
     verts=[]
     faces=[]
 
-    preset = args.thread_preset[0]
     thread_length = args.thread_length[0]
     seglen = args.segment_length[0] / 1000
 
-    v_profile_2d, thread_pitch = get_2d_profile(args, preset)
+
+    if args.thread_preset is None:
+      v_profile_2d, thread_pitch = iso_metric_thread(args, args.thread_diameter, args.thread_pitch)
+    else:
+      v_profile_2d, thread_pitch = get_2d_profile(args, args.thread_preset)
 
     if args.output_2d:
         print("Dumping 2d vertices to", args.output_2d[0])
@@ -343,21 +346,23 @@ def thread(args):
 def main():
     from argparse import ArgumentParser
     p=ArgumentParser()
-    p.add_argument("output", nargs="*")
-    p.add_argument("-t", "--thread-preset", nargs=1, type=str, help="M<integer> code")
+    p.add_argument("output", nargs="*", help="suffix can be one of: .off .obj .stl")
+    p.add_argument("-t", "--thread-preset", type=str, default=None, help="preset name or \"list\"")
+    p.add_argument("-d", "--thread-diameter", type=float, help="major diameter. used if -t not specified")
+    p.add_argument("-p", "--thread-pitch", type=float, help="thread pitch. used if -t not specified")
     p.add_argument("-l", "--thread-length", nargs=1, type=float, default=[15], help="Length of the usable thread (total length is slightly longer) as millimeters")
     p.add_argument("-s", "--segment-length", nargs=1, type=float, default=[200], help="Maximum length for a segment as micrometers. Controls the final vertex count")
     p.add_argument("-i", "--internal", action="store_true", help="set thread to be internal (nut / to be CSG-subtracted from a solid) instead of external (bolt / to be CSG-unioned to a solid)")
     p.add_argument("-x", "--tolerance-x", nargs=1, type=float, default=[120], help="Tolerance along length of the screw as micrometers")
-    p.add_argument("-y", "--tolerance-y", nargs=1, type=float, default=[15], help="Tolerance along diameter of the screw as micrometers")
+    p.add_argument("-y", "--tolerance-y", nargs=1, type=float, default=[150], help="Tolerance along diameter of the screw as micrometers")
     p.add_argument("-z", "--z-major", action="store_true", help="have the bolt be parallel to Z axis instead of X")
     p.add_argument("-2", "--output-2d", nargs=1, type=str, help="write XY vertices to this file")
     args = p.parse_args()
 
-    if args.thread_preset is None:
-        print("Thread presets:")
+    if args.thread_preset == "list":
+        print("%-15s | %-8s | %-8s" % ("Preset","Diameter","Pitch"))
         for k in preset_table.keys():
-            print(k)
+            print("%-15s , %-8.2f , %-8.2f" % ((k,)+preset_table[k][1]))
         exit(0)
 
     verts,faces = thread(args)
