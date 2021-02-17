@@ -1,37 +1,27 @@
 
 .PHONY: all clean plot
 
-M=m6
-L=20
-ARGS=-t$(M) -l$(L) -s600 -x200 -y50 -z
+# dependencies of demo.scad
+all: stuff/m6x20m.stl stuff/m6x20f.stl ;
 
-all: liitin.stl
+stuff/m6x20m.stl:
+	python3 thread.py $@ -t m6 -l 20 -s600 -x200 -y50 -z
 
-clean:
-	rm -fv $(wildcard *.stl) $(wildcard *.obj) vertices.ps vertices.txt
+stuff/m6x20f.stl:
+	python3 thread.py $@ -t m6 -l 20 -s600 -x200 -y50 -z -i
 
-$(M)x$(L)m.stl: $(M)x$(L)f.stl
-	python3 thread.py $@ $(ARGS)
-
-$(M)x$(L)f.stl: thread.py Makefile
-	python3 thread.py $@ $(ARGS) -i
-
-liitin.stl: liitin.scad $(M)x$(L)m.stl $(M)x$(L)f.stl
-	openscad -o $@ $<
-
-tolerance_test.stl: tolerance_test.scad thread.py
-	openscad -o $@ $<
-
-#	openscad -o liitin.csg $<
-#	hob3l liitin.csg -o $@
-
-plot: vertices.ps
+# view 2d profile of thread
+plot: stuff/vertices.ps
 	nohup okular $< >/dev/null 2>&1 &
 
-vertices.ps: vertices.txt plot.p
+stuff/vertices.ps: stuff/vertices.txt stuff/plot.p
 	rm -f $@
-	gnuplot plot.p
+	gnuplot stuff/plot.p
 
-vertices.txt: thread.py Makefile
+stuff/vertices.txt: thread.py Makefile
 	python3 thread.py --output-2d $@ -t m12 -l20
+
+clean:
+	rm -fv stuff/vertices.ps stuff/vertices.txt
+
 
