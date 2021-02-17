@@ -1,6 +1,10 @@
 #!/usr/bin/python3
 from math import *
 
+# vim: set expandtab:
+# vim: set shiftwidth=4:
+# vim: set tabstop=4:
+
 class Vec:
     def __init__(self,x,y=None,z=0):
         self.x = x
@@ -50,7 +54,7 @@ def write_obj(filepath, vertices, faces):
             f.write("\n")
 
 def write_off(filepath, vertices, faces):
-    """ supported by OpenSCAD. maybe faster than STL because of index array """
+    """ supported by OpenSCAD. smaller and better than STL because of index array """
     with open(filepath,"w") as f:
         f.write("OFF\n")
         f.write("%d %d 0\n" % (len(vertices),len(faces)))
@@ -256,6 +260,7 @@ def rotate_90deg_cw(x,y):
     return y, -x
 
 preset_table={
+# https://en.wikipedia.org/wiki/ISO_metric_screw_thread
 "m2"         :  (iso_metric_thread, (2.0, 0.40)),
 "m2-fine"    :  (iso_metric_thread, (2.0, 0.25)),
 "m2.5"       :  (iso_metric_thread, (2.5, 0.45)),
@@ -276,6 +281,45 @@ preset_table={
 "m12"        :  (iso_metric_thread, (12., 1.75)),
 "m12-fine"   :  (iso_metric_thread, (12., 1.50)),
 "m12-finer"  :  (iso_metric_thread, (12., 1.25)),
+"m14"        :  (iso_metric_thread, (14., 2.00)),
+"m14-fine"   :  (iso_metric_thread, (14., 1.50)),
+"m16"        :  (iso_metric_thread, (16., 2.00)),
+"m16-fine"   :  (iso_metric_thread, (16., 1.50)),
+"m18"        :  (iso_metric_thread, (18., 2.50)),
+"m18-fine"   :  (iso_metric_thread, (18., 2.00)),
+"m18-finer"  :  (iso_metric_thread, (18., 1.50)),
+"m20"        :  (iso_metric_thread, (20., 2.50)),
+"m20-fine"   :  (iso_metric_thread, (20., 2.00)),
+"m20-finer"  :  (iso_metric_thread, (20., 1.50)),
+"m22"        :  (iso_metric_thread, (22., 2.50)),
+"m22-fine"   :  (iso_metric_thread, (22., 2.00)),
+"m22-finer"  :  (iso_metric_thread, (22., 1.50)),
+"m24"        :  (iso_metric_thread, (24., 3.00)),
+"m24-fine"   :  (iso_metric_thread, (24., 2.00)),
+"m27"        :  (iso_metric_thread, (27., 3.00)),
+"m27-fine"   :  (iso_metric_thread, (27., 2.00)),
+"m30"        :  (iso_metric_thread, (30., 3.50)),
+"m30-fine"   :  (iso_metric_thread, (30., 2.00)),
+"m33"        :  (iso_metric_thread, (33., 3.50)),
+"m33-fine"   :  (iso_metric_thread, (33., 2.00)),
+"m36"        :  (iso_metric_thread, (36., 4.00)),
+"m36-fine"   :  (iso_metric_thread, (36., 3.00)),
+"m39"        :  (iso_metric_thread, (39., 4.00)),
+"m39-fine"   :  (iso_metric_thread, (39., 3.00)),
+"m42"        :  (iso_metric_thread, (42., 4.50)),
+"m42-fine"   :  (iso_metric_thread, (42., 3.00)),
+"m45"        :  (iso_metric_thread, (45., 4.50)),
+"m45-fine"   :  (iso_metric_thread, (45., 3.00)),
+"m48"        :  (iso_metric_thread, (48., 5.00)),
+"m48-fine"   :  (iso_metric_thread, (48., 3.00)),
+"m52"        :  (iso_metric_thread, (52., 5.00)),
+"m52-fine"   :  (iso_metric_thread, (52., 4.00)),
+"m56"        :  (iso_metric_thread, (56., 5.50)),
+"m56-fine"   :  (iso_metric_thread, (56., 4.00)),
+"m60"        :  (iso_metric_thread, (60., 5.50)),
+"m60-fine"   :  (iso_metric_thread, (60., 4.00)),
+"m64"        :  (iso_metric_thread, (64., 6.00)),
+"m64-fine"   :  (iso_metric_thread, (64., 4.00)),
 }
 
 def get_2d_profile(cmd_args, preset):
@@ -347,7 +391,7 @@ def main():
     from argparse import ArgumentParser
     p=ArgumentParser()
     p.add_argument("output", nargs="*", help="suffix can be one of: .off .obj .stl")
-    p.add_argument("-t", "--thread-preset", type=str, default=None, help="preset name or \"list\"")
+    p.add_argument("-t", "--thread-preset", type=str, default=None, help="preset name or \"list\" or \"list-all\"")
     p.add_argument("-d", "--thread-diameter", type=float, help="major diameter. used if -t not specified")
     p.add_argument("-p", "--thread-pitch", type=float, help="thread pitch. used if -t not specified")
     p.add_argument("-l", "--thread-length", nargs=1, type=float, default=[15], help="Length of the usable thread (total length is slightly longer) as millimeters")
@@ -359,10 +403,11 @@ def main():
     p.add_argument("-2", "--output-2d", nargs=1, type=str, help="write XY vertices to this file")
     args = p.parse_args()
 
-    if args.thread_preset == "list":
+    if args.thread_preset and "list" in args.thread_preset.lower():
         print("%-15s | %-8s | %-8s" % ("Preset","Diameter","Pitch"))
         for k in preset_table.keys():
-            print("%-15s , %-8.2f , %-8.2f" % ((k,)+preset_table[k][1]))
+            if "all" in args.thread_preset.lower() or "fine" not in k:
+               print("%-15s , %-8.2f , %-8.2f" % ((k,)+preset_table[k][1]))
         exit(0)
 
     verts,faces = thread(args)
@@ -380,7 +425,7 @@ def main():
         func(fn, verts, faces)
 
     if len(args.output) == 0:
-    	print("No output files")
+        print("No output files")
 
 if __name__ == "__main__":
     main()
