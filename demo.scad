@@ -4,10 +4,10 @@ L=20;
 module M() { import("stuff/m6x20m.stl"); }
 module F() { import("stuff/m6x20f.stl"); }
 
+render(convexity=10)
 intersection() {
 	difference() {
 		union() {
-			render(convexity=10)
 			difference() {
 				cylinder(h=25, d=D+3, center=true, $fn=60);
 				F();
